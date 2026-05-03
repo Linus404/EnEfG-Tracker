@@ -1,0 +1,845 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EnEfG-Tracker</title>
+  <style>
+    :root {
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #667085;
+      --border: #d0d5dd;
+      --accent: #0f766e;
+      --accent-dark: #115e59;
+      --ok-bg: #dcfce7;
+      --ok-text: #166534;
+      --warn-bg: #fef3c7;
+      --warn-text: #92400e;
+      --bad-bg: #fee2e2;
+      --bad-text: #991b1b;
+      --neutral-bg: #e5e7eb;
+      --neutral-text: #374151;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    header {
+      padding: 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+      line-height: 1.2;
+    }
+
+    .subline {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    main {
+      padding: 20px 24px 40px;
+    }
+
+    .toolbar,
+    .summary,
+    .notes {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 16px;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    button,
+    .file-label {
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 10px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    button.primary:hover { background: var(--accent-dark); }
+    button:hover, .file-label:hover { border-color: var(--accent); }
+    button.danger:hover { border-color: #dc2626; color: #991b1b; }
+
+    input[type="file"] { display: none; }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--panel);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 1500px;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid var(--border);
+      padding: 8px;
+      text-align: right;
+      vertical-align: middle;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    th {
+      background: #f2f4f7;
+      color: #344054;
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    th:first-child,
+    td:first-child,
+    th.status-col,
+    td.status-col,
+    th.comment-col,
+    td.comment-col {
+      text-align: left;
+    }
+
+    input {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px;
+      font: inherit;
+      text-align: right;
+    }
+
+    input.comment { text-align: left; min-width: 220px; }
+    input.year { text-align: left; width: 80px; }
+
+    .computed {
+      color: #344054;
+      background: #fcfcfd;
+    }
+
+    .status {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    .status.ok { background: var(--ok-bg); color: var(--ok-text); }
+    .status.warn { background: var(--warn-bg); color: var(--warn-text); }
+    .status.bad { background: var(--bad-bg); color: var(--bad-text); }
+    .status.neutral { background: var(--neutral-bg); color: var(--neutral-text); }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+    }
+
+    .metric {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      background: #fcfcfd;
+    }
+
+    .metric-label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .metric-value {
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .notes {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .notes ul { margin: 8px 0 0 18px; padding: 0; }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>EnEfG-Tracker</h1>
+    <p class="subline">§ 6 - Energieeffizienzgesetz (EnEfG) Absatz 1, lokale Bearbeitung im Browser, Export nach JSON und CSV.</p>
+  </header>
+
+  <main>
+    <section class="toolbar" aria-label="Aktionen">
+      <button class="primary" type="button" id="addRowButton">Jahr hinzufügen</button>
+      <button type="button" id="addExampleButton">Beispieldaten laden</button>
+      <button type="button" id="exportJsonButton">JSON exportieren</button>
+      <button type="button" id="exportCsvButton">CSV exportieren</button>
+      <label class="file-label" for="importJsonInput">JSON importieren</label>
+      <input id="importJsonInput" type="file" accept="application/json,.json" />
+      <button class="danger" type="button" id="clearButton">Lokal löschen</button>
+    </section>
+
+    <section class="summary" aria-label="Zusammenfassung">
+      <div class="summary-grid">
+        <div class="metric">
+          <div class="metric-label">Jahre</div>
+          <div class="metric-value" id="metricYears">0</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Offene Fehlmenge</div>
+          <div class="metric-value" id="metricOpenDeficit">0,00 MWh</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Überfällig</div>
+          <div class="metric-value" id="metricOverdue">0,00 MWh</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Verfügbares Guthaben Folgejahr</div>
+          <div class="metric-value" id="metricCreditNextYear">0,00 MWh</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="table-wrap" aria-label="Eingabe und Berechnung">
+      <table>
+        <thead>
+          <tr>
+            <th>Jahr</th>
+            <th>Verbrauch Vorjahr<br />MWh</th>
+            <th>Verbrauch aktuell<br />MWh</th>
+            <th>Einsparung Maßnahmen<br />MWh</th>
+            <th>Verbrauchsdifferenz<br />MWh</th>
+            <th>Pflichtig</th>
+            <th>Basisziel 2 %<br />MWh</th>
+            <th>Nachholung 1J<br />MWh</th>
+            <th>Nachholung 2J<br />MWh</th>
+            <th>Gesamtziel<br />MWh</th>
+            <th>Guthaben verwendet<br />MWh</th>
+            <th>Erfüllung gesamt<br />MWh</th>
+            <th>Neues Guthaben<br />MWh</th>
+            <th>Fehlmenge<br />MWh</th>
+            <th>Überfällig<br />MWh</th>
+            <th class="status-col">Status</th>
+            <th class="comment-col">Kommentar</th>
+            <th>Aktion</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </section>
+
+    <section class="notes">
+      <strong>Verrechnungslogik:</strong>
+      <ul>
+        <li>Pflichtigkeit ab 1.000,00 MWh Verbrauch im Vorjahr.</li>
+        <li>Basisziel = 2 % des Vorjahresverbrauchs.</li>
+        <li>Fehlmengen werden bis zu zwei Folgejahre weitergeführt; danach erscheinen sie als überfällig.</li>
+        <li>Übererfüllungen werden bis zu fünf Folgejahre als Guthaben geführt und nicht doppelt verwendet.</li>
+        <li>Guthaben wird zuerst auf Zielerfüllung angerechnet; verbleibende Maßnahmen-Einsparung erzeugt neues Guthaben.</li>
+      </ul>
+    </section>
+  </main>
+
+  <script>
+    "use strict";
+
+    const STORAGE_KEY = "enefg-tracker-v1";
+    const NUMBER_FORMAT = new Intl.NumberFormat("de-DE", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+    /** @typedef {{year:number|null, previousConsumptionMwh:number|null, currentConsumptionMwh:number|null, measureSavingsMwh:number|null, comment:string}} InputRow */
+    /** @typedef {{amount:number, remainingYears:number}} Credit */
+    /** @typedef {{amount:number, remainingYears:number}} Deficit */
+    /** @typedef {InputRow & {consumptionDifferenceMwh:number, obligated:boolean, baseTargetMwh:number, catchupOneYearMwh:number, catchupTwoYearMwh:number, totalTargetMwh:number, usedCreditMwh:number, totalFulfillmentMwh:number, newCreditMwh:number, deficitMwh:number, overdueMwh:number, status:string, creditsEnd:Credit[], deficitsEnd:Deficit[]}} CalculatedRow */
+
+    /** @type {InputRow[]} */
+    let rows = loadRows();
+
+    const tableBody = document.getElementById("tableBody");
+    const addRowButton = document.getElementById("addRowButton");
+    const addExampleButton = document.getElementById("addExampleButton");
+    const exportJsonButton = document.getElementById("exportJsonButton");
+    const exportCsvButton = document.getElementById("exportCsvButton");
+    const importJsonInput = document.getElementById("importJsonInput");
+    const clearButton = document.getElementById("clearButton");
+
+    addRowButton.addEventListener("click", () => {
+      const maxYear = Math.max(0, ...rows.map((row) => row.year || 0));
+      rows.push({
+        year: maxYear > 0 ? maxYear + 1 : new Date().getFullYear(),
+        previousConsumptionMwh: null,
+        currentConsumptionMwh: null,
+        measureSavingsMwh: null,
+        comment: "",
+      });
+      persistAndRender();
+    });
+
+    addExampleButton.addEventListener("click", () => {
+      if (rows.length > 0 && !confirm("Vorhandene lokale Daten durch Beispieldaten ersetzen?")) return;
+
+      rows = [
+        {
+          year: 2025,
+          previousConsumptionMwh: 1200.00,
+          currentConsumptionMwh: 1190.00,
+          measureSavingsMwh: 10.00,
+          comment: "Untererfüllung; Fehlmenge entsteht",
+        },
+        {
+          year: 2026,
+          previousConsumptionMwh: 1190.00,
+          currentConsumptionMwh: 1180.00,
+          measureSavingsMwh: 10.00,
+          comment: "Nachholung aus 2025 wird nur teilweise erfüllt",
+        },
+        {
+          year: 2027,
+          previousConsumptionMwh: 1180.00,
+          currentConsumptionMwh: 1178.00,
+          measureSavingsMwh: 2.00,
+          comment: "Nachholung 2J ist > 0; zugleich wird ein Teil überfällig",
+        },
+        {
+          year: 2028,
+          previousConsumptionMwh: 1178.00,
+          currentConsumptionMwh: 1130.00,
+          measureSavingsMwh: 90.00,
+          comment: "Hohe Maßnahmen-Einsparung; neues Guthaben entsteht",
+        },
+        {
+          year: 2029,
+          previousConsumptionMwh: 1130.00,
+          currentConsumptionMwh: 1120.00,
+          measureSavingsMwh: 5.00,
+          comment: "Guthaben aus Vergangenheit wird verwendet",
+        },
+        {
+          year: 2030,
+          previousConsumptionMwh: 1120.00,
+          currentConsumptionMwh: 1110.00,
+          measureSavingsMwh: 8.00,
+          comment: "weiterer Guthabenverbrauch",
+        },
+        {
+          year: 2031,
+          previousConsumptionMwh: 1110.00,
+          currentConsumptionMwh: 1100.00,
+          measureSavingsMwh: 10.00,
+          comment: "weiteres Testjahr",
+        },
+      ];
+
+      persistAndRender();
+    });
+
+    exportJsonButton.addEventListener("click", () => {
+      downloadFile("enefg-tracker.json", JSON.stringify({ version: 1, rows }, null, 2), "application/json;charset=utf-8");
+    });
+
+    exportCsvButton.addEventListener("click", () => {
+      const calculatedRows = calculateRows(rows);
+      downloadFile("enefg-tracker.csv", toCsv(calculatedRows), "text/csv;charset=utf-8");
+    });
+
+    importJsonInput.addEventListener("change", async (event) => {
+      const input = event.target;
+      const file = input.files && input.files[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        const importedRows = Array.isArray(parsed) ? parsed : parsed.rows;
+        rows = validateRows(importedRows);
+        persistAndRender();
+      } catch (error) {
+        console.error(error);
+        alert("JSON konnte nicht importiert werden. Bitte Datei prüfen.");
+      } finally {
+        input.value = "";
+      }
+    });
+
+    clearButton.addEventListener("click", () => {
+      if (!confirm("Alle lokal gespeicherten Daten löschen?")) return;
+      rows = [];
+      persistAndRender();
+    });
+
+    render();
+
+    /**
+     * Calculates statutory tracking values row by row.
+     *
+     * @param {InputRow[]} inputRows
+     * @returns {CalculatedRow[]}
+     */
+    function calculateRows(inputRows) {
+      const sortedRows = [...inputRows].sort((a, b) => safeNumber(a.year) - safeNumber(b.year));
+      /** @type {Credit[]} */
+      let credits = [];
+      /** @type {Deficit[]} */
+      let deficits = [];
+      /** @type {CalculatedRow[]} */
+      const result = [];
+
+      for (const row of sortedRows) {
+        const previousConsumptionMwh = safeNumber(row.previousConsumptionMwh);
+        const currentConsumptionMwh = safeNumber(row.currentConsumptionMwh);
+        const measureSavingsMwh = safeNumber(row.measureSavingsMwh);
+        const consumptionDifferenceMwh = previousConsumptionMwh - currentConsumptionMwh;
+        const obligated = previousConsumptionMwh >= 1000;
+        const baseTargetMwh = obligated ? previousConsumptionMwh * 0.02 : 0;
+
+        const catchupOneYearMwh = sum(deficits.filter((item) => item.remainingYears === 2).map((item) => item.amount));
+        const catchupTwoYearMwh = sum(deficits.filter((item) => item.remainingYears === 1).map((item) => item.amount));
+        const totalTargetMwh = baseTargetMwh + catchupOneYearMwh + catchupTwoYearMwh;
+
+        const remainingTargetAfterMeasuresMwh = Math.max(0, totalTargetMwh - measureSavingsMwh);
+        const usedCreditMwh = Math.min(remainingTargetAfterMeasuresMwh, sum(credits.map((item) => item.amount)));
+        const creditsAfterUse = consumeCreditsFifo(credits, usedCreditMwh);
+        const totalFulfillmentMwh = measureSavingsMwh + usedCreditMwh;
+
+        let remainingFulfillment = totalFulfillmentMwh;
+        const restCatchupTwoYearMwh = Math.max(0, catchupTwoYearMwh - remainingFulfillment);
+        remainingFulfillment = Math.max(0, remainingFulfillment - catchupTwoYearMwh);
+
+        const restCatchupOneYearMwh = Math.max(0, catchupOneYearMwh - remainingFulfillment);
+        remainingFulfillment = Math.max(0, remainingFulfillment - catchupOneYearMwh);
+
+        const restBaseTargetMwh = Math.max(0, baseTargetMwh - remainingFulfillment);
+        remainingFulfillment = Math.max(0, remainingFulfillment - baseTargetMwh);
+
+        const newCreditMwh = remainingFulfillment;
+        const deficitMwh = restCatchupOneYearMwh + restBaseTargetMwh;
+        const overdueMwh = restCatchupTwoYearMwh;
+        const status = getStatus(obligated, deficitMwh, overdueMwh);
+
+        const nextCredits = ageCredits(creditsAfterUse);
+        if (newCreditMwh > 0) nextCredits.push({ amount: newCreditMwh, remainingYears: 5 });
+
+        const nextDeficits = [];
+        if (restCatchupOneYearMwh > 0) nextDeficits.push({ amount: restCatchupOneYearMwh, remainingYears: 1 });
+        if (restBaseTargetMwh > 0) nextDeficits.push({ amount: restBaseTargetMwh, remainingYears: 2 });
+
+        const calculatedRow = {
+          ...row,
+          consumptionDifferenceMwh,
+          obligated,
+          baseTargetMwh,
+          catchupOneYearMwh,
+          catchupTwoYearMwh,
+          totalTargetMwh,
+          usedCreditMwh,
+          totalFulfillmentMwh,
+          newCreditMwh,
+          deficitMwh,
+          overdueMwh,
+          status,
+          creditsEnd: nextCredits,
+          deficitsEnd: nextDeficits,
+        };
+
+        result.push(calculatedRow);
+        credits = nextCredits;
+        deficits = nextDeficits;
+      }
+
+      return result;
+    }
+
+    /**
+     * Consumes oldest available credits first.
+     *
+     * @param {Credit[]} credits
+     * @param {number} amount
+     * @returns {Credit[]}
+     */
+    function consumeCreditsFifo(credits, amount) {
+      let remaining = amount;
+      return [...credits]
+        .sort((a, b) => a.remainingYears - b.remainingYears)
+        .map((credit) => {
+          const used = Math.min(credit.amount, remaining);
+          remaining -= used;
+          return { amount: credit.amount - used, remainingYears: credit.remainingYears };
+        })
+        .filter((credit) => credit.amount > 0.000001);
+    }
+
+    /**
+     * Ages credits by one year and drops expired credits.
+     *
+     * @param {Credit[]} credits
+     * @returns {Credit[]}
+     */
+    function ageCredits(credits) {
+      return credits
+        .map((credit) => ({ amount: credit.amount, remainingYears: credit.remainingYears - 1 }))
+        .filter((credit) => credit.amount > 0.000001 && credit.remainingYears > 0);
+    }
+
+    /**
+     * @param {boolean} obligated
+     * @param {number} deficitMwh
+     * @param {number} overdueMwh
+     * @returns {string}
+     */
+    function getStatus(obligated, deficitMwh, overdueMwh) {
+      if (!obligated) return "nicht pflichtig";
+      if (overdueMwh > 0.000001) return "überfällig";
+      if (deficitMwh > 0.000001) return "Nachholung erforderlich";
+      return "erfüllt";
+    }
+
+    function render() {
+      const calculatedRows = calculateRows(rows);
+      tableBody.innerHTML = "";
+
+      for (const row of calculatedRows) {
+        const sourceIndex = rows.findIndex((item) => item === row || item.year === row.year);
+        tableBody.appendChild(createRowElement(row, sourceIndex));
+      }
+
+      updateMetrics(calculatedRows);
+      saveRows(rows);
+    }
+
+    /**
+     * @param {CalculatedRow} row
+     * @param {number} index
+     * @returns {HTMLTableRowElement}
+     */
+    function createRowElement(row, index) {
+      const tr = document.createElement("tr");
+      tr.appendChild(inputCell(row.year, "year", index, "year"));
+      tr.appendChild(inputCell(row.previousConsumptionMwh, "previousConsumptionMwh", index));
+      tr.appendChild(inputCell(row.currentConsumptionMwh, "currentConsumptionMwh", index));
+      tr.appendChild(inputCell(row.measureSavingsMwh, "measureSavingsMwh", index));
+      tr.appendChild(valueCell(row.consumptionDifferenceMwh));
+      tr.appendChild(valueCell(row.obligated ? "WAHR" : "FALSCH"));
+      tr.appendChild(valueCell(row.baseTargetMwh));
+      tr.appendChild(valueCell(row.catchupOneYearMwh));
+      tr.appendChild(valueCell(row.catchupTwoYearMwh));
+      tr.appendChild(valueCell(row.totalTargetMwh));
+      tr.appendChild(valueCell(row.usedCreditMwh));
+      tr.appendChild(valueCell(row.totalFulfillmentMwh));
+      tr.appendChild(valueCell(row.newCreditMwh));
+      tr.appendChild(valueCell(row.deficitMwh));
+      tr.appendChild(valueCell(row.overdueMwh));
+      tr.appendChild(statusCell(row.status));
+      tr.appendChild(inputCell(row.comment, "comment", index, "comment"));
+      tr.appendChild(actionCell(index));
+      return tr;
+    }
+
+    /**
+     * @param {number|string|null} value
+     * @param {keyof InputRow} key
+     * @param {number} index
+     * @param {string=} className
+     * @returns {HTMLTableCellElement}
+     */
+    function inputCell(value, key, index, className) {
+      const td = document.createElement("td");
+      const input = document.createElement("input");
+      input.className = className || "";
+      input.value = value === null || value === undefined ? "" : String(value).replace(".", ",");
+      input.setAttribute("aria-label", key);
+      input.addEventListener("change", () => {
+        const row = rows[index];
+        if (!row) return;
+        if (key === "comment") {
+          row.comment = input.value;
+        } else {
+          const parsed = parseGermanNumber(input.value);
+          row[key] = Number.isFinite(parsed) ? parsed : null;
+        }
+        persistAndRender();
+      });
+      td.appendChild(input);
+      return td;
+    }
+
+    /**
+     * @param {number|string|boolean} value
+     * @returns {HTMLTableCellElement}
+     */
+    function valueCell(value) {
+      const td = document.createElement("td");
+      td.className = "computed";
+      td.textContent = typeof value === "number" ? formatNumber(value) : String(value);
+      return td;
+    }
+
+    /**
+     * @param {string} status
+     * @returns {HTMLTableCellElement}
+     */
+    function statusCell(status) {
+      const td = document.createElement("td");
+      td.className = "status-col";
+      const span = document.createElement("span");
+      span.className = `status ${statusClass(status)}`;
+      span.textContent = status;
+      td.appendChild(span);
+      return td;
+    }
+
+    /**
+     * @param {number} index
+     * @returns {HTMLTableCellElement}
+     */
+    function actionCell(index) {
+      const td = document.createElement("td");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "danger";
+      button.textContent = "Löschen";
+      button.addEventListener("click", () => {
+        rows.splice(index, 1);
+        persistAndRender();
+      });
+      td.appendChild(button);
+      return td;
+    }
+
+    /**
+     * @param {CalculatedRow[]} calculatedRows
+     * @returns {void}
+     */
+    function updateMetrics(calculatedRows) {
+      const last = calculatedRows[calculatedRows.length - 1];
+      document.getElementById("metricYears").textContent = String(calculatedRows.length);
+      document.getElementById("metricOpenDeficit").textContent = `${formatNumber(last ? sum(last.deficitsEnd.map((item) => item.amount)) : 0)} MWh`;
+      document.getElementById("metricOverdue").textContent = `${formatNumber(sum(calculatedRows.map((row) => row.overdueMwh)))} MWh`;
+      document.getElementById("metricCreditNextYear").textContent = `${formatNumber(last ? sum(last.creditsEnd.map((item) => item.amount)) : 0)} MWh`;
+    }
+
+    /**
+     * @param {CalculatedRow[]} calculatedRows
+     * @returns {string}
+     */
+    function toCsv(calculatedRows) {
+      const headers = [
+        "Jahr",
+        "Verbrauch_Vorjahr_MWh",
+        "Verbrauch_Aktuelles_Jahr_MWh",
+        "Einsparung_Massnahmen_MWh",
+        "Verbrauchsdifferenz_MWh",
+        "Pflichtig",
+        "Basisziel_2pct_MWh",
+        "Nachholung_aus_Vorjahr_MWh",
+        "Nachholung_aus_Vorvorjahr_MWh",
+        "Gesamtziel_MWh",
+        "Guthaben_verwendet_MWh",
+        "Erfuellung_gesamt_MWh",
+        "Neues_Guthaben_MWh",
+        "Fehlmenge_MWh",
+        "Ueberfaellig_MWh",
+        "Status",
+        "Kommentar",
+      ];
+
+      const lines = calculatedRows.map((row) => [
+        row.year,
+        row.previousConsumptionMwh,
+        row.currentConsumptionMwh,
+        row.measureSavingsMwh,
+        row.consumptionDifferenceMwh,
+        row.obligated ? "WAHR" : "FALSCH",
+        row.baseTargetMwh,
+        row.catchupOneYearMwh,
+        row.catchupTwoYearMwh,
+        row.totalTargetMwh,
+        row.usedCreditMwh,
+        row.totalFulfillmentMwh,
+        row.newCreditMwh,
+        row.deficitMwh,
+        row.overdueMwh,
+        row.status,
+        row.comment,
+      ].map(csvValue).join(";"));
+
+      return `\ufeff${headers.join(";")}\n${lines.join("\n")}`;
+    }
+
+    /**
+     * @param {unknown} value
+     * @returns {string}
+     */
+    function csvValue(value) {
+      if (typeof value === "number") return formatNumber(value);
+      const text = value === null || value === undefined ? "" : String(value);
+      return `"${text.replaceAll('"', '""')}"`;
+    }
+
+    /**
+     * @param {unknown} value
+     * @returns {number}
+     */
+    function parseGermanNumber(value) {
+      if (typeof value === "number") return value;
+      const text = String(value || "").trim();
+      if (text === "") return NaN;
+      return Number(text.replaceAll(".", "").replace(",", "."));
+    }
+
+    /**
+     * @param {number|null|undefined} value
+     * @returns {number}
+     */
+    function safeNumber(value) {
+      return typeof value === "number" && Number.isFinite(value) ? value : 0;
+    }
+
+    /**
+     * @param {number} value
+     * @returns {string}
+     */
+    function formatNumber(value) {
+      const rounded = Math.round((value + Number.EPSILON) * 100) / 100;
+      return NUMBER_FORMAT.format(rounded);
+    }
+
+    /**
+     * @param {number[]} values
+     * @returns {number}
+     */
+    function sum(values) {
+      return values.reduce((total, value) => total + value, 0);
+    }
+
+    /**
+     * @param {string} status
+     * @returns {string}
+     */
+    function statusClass(status) {
+      if (status === "erfüllt") return "ok";
+      if (status === "Nachholung erforderlich") return "warn";
+      if (status === "überfällig") return "bad";
+      return "neutral";
+    }
+
+    /** @returns {InputRow[]} */
+    function loadRows() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return [];
+        return validateRows(JSON.parse(raw));
+      } catch (error) {
+        console.error(error);
+        return [];
+      }
+    }
+
+    /**
+     * @param {unknown} value
+     * @returns {InputRow[]}
+     */
+    function validateRows(value) {
+      if (!Array.isArray(value)) throw new Error("JSON enthält keine Zeilenliste.");
+      return value.map((row) => {
+        if (typeof row !== "object" || row === null) throw new Error("Ungültige Zeile.");
+        const record = /** @type {Record<string, unknown>} */ (row);
+        return {
+          year: toNullableNumber(record.year),
+          previousConsumptionMwh: toNullableNumber(record.previousConsumptionMwh),
+          currentConsumptionMwh: toNullableNumber(record.currentConsumptionMwh),
+          measureSavingsMwh: toNullableNumber(record.measureSavingsMwh),
+          comment: typeof record.comment === "string" ? record.comment : "",
+        };
+      });
+    }
+
+    /**
+     * @param {unknown} value
+     * @returns {number|null}
+     */
+    function toNullableNumber(value) {
+      if (value === null || value === undefined || value === "") return null;
+      const parsed = typeof value === "number" ? value : parseGermanNumber(value);
+      if (!Number.isFinite(parsed)) return null;
+      return parsed;
+    }
+
+    /** @param {InputRow[]} value */
+    function saveRows(value) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+    }
+
+    function persistAndRender() {
+      saveRows(rows);
+      render();
+    }
+
+    /**
+     * @param {string} filename
+     * @param {string} content
+     * @param {string} mimeType
+     */
+    function downloadFile(filename, content, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
