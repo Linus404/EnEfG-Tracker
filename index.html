@@ -104,7 +104,7 @@
     table {
       width: 100%;
       border-collapse: collapse;
-      min-width: 1500px;
+      min-width: 1400px;
     }
 
     th,
@@ -253,9 +253,8 @@
         <thead>
           <tr>
             <th>Jahr</th>
-            <th>Verbrauch Vorjahr<br />MWh</th>
             <th>Verbrauch aktuell<br />MWh</th>
-            <th>Einsparung Maßnahmen<br />MWh</th>
+            <th>Verbrauch Vorjahr<br />MWh</th>
             <th>Verbrauchsdifferenz<br />MWh</th>
             <th>Pflichtig</th>
             <th>Basisziel 2 %<br />MWh</th>
@@ -283,7 +282,7 @@
         <li>Basisziel = 2 % des Vorjahresverbrauchs.</li>
         <li>Fehlmengen werden bis zu zwei Folgejahre weitergeführt; danach erscheinen sie als überfällig.</li>
         <li>Übererfüllungen werden bis zu fünf Folgejahre als Guthaben geführt und nicht doppelt verwendet.</li>
-        <li>Guthaben wird zuerst auf Zielerfüllung angerechnet; verbleibende Maßnahmen-Einsparung erzeugt neues Guthaben.</li>
+        <li>Guthaben wird zuerst auf Zielerfüllung angerechnet; verbleibende Verbrauchsdifferenz erzeugt neues Guthaben.</li>
       </ul>
     </section>
   </main>
@@ -297,7 +296,7 @@
       maximumFractionDigits: 2,
     });
 
-    /** @typedef {{year:number|null, previousConsumptionMwh:number|null, currentConsumptionMwh:number|null, measureSavingsMwh:number|null, comment:string}} InputRow */
+    /** @typedef {{year:number|null, previousConsumptionMwh:number|null, currentConsumptionMwh:number|null, comment:string}} InputRow */
     /** @typedef {{amount:number, remainingYears:number}} Credit */
     /** @typedef {{amount:number, remainingYears:number}} Deficit */
     /** @typedef {InputRow & {consumptionDifferenceMwh:number, obligated:boolean, baseTargetMwh:number, catchupOneYearMwh:number, catchupTwoYearMwh:number, totalTargetMwh:number, usedCreditMwh:number, totalFulfillmentMwh:number, newCreditMwh:number, deficitMwh:number, overdueMwh:number, status:string, creditsEnd:Credit[], deficitsEnd:Deficit[]}} CalculatedRow */
@@ -319,7 +318,6 @@
         year: maxYear > 0 ? maxYear + 1 : new Date().getFullYear(),
         previousConsumptionMwh: null,
         currentConsumptionMwh: null,
-        measureSavingsMwh: null,
         comment: "",
       });
       persistAndRender();
@@ -333,50 +331,49 @@
           year: 2025,
           previousConsumptionMwh: 1200.00,
           currentConsumptionMwh: 1190.00,
-          measureSavingsMwh: 10.00,
           comment: "Untererfüllung; Fehlmenge entsteht",
         },
         {
           year: 2026,
-          previousConsumptionMwh: 1190.00,
-          currentConsumptionMwh: 1180.00,
-          measureSavingsMwh: 10.00,
-          comment: "Nachholung aus 2025 wird nur teilweise erfüllt",
+          previousConsumptionMwh: null,
+          currentConsumptionMwh: 1120.00,
+          comment: "Nachholung erfüllt; neues Guthaben entsteht",
         },
         {
           year: 2027,
-          previousConsumptionMwh: 1180.00,
-          currentConsumptionMwh: 1178.00,
-          measureSavingsMwh: 2.00,
-          comment: "Nachholung 2J ist > 0; zugleich wird ein Teil überfällig",
+          previousConsumptionMwh: null,
+          currentConsumptionMwh: 1110.00,
+          comment: "Guthaben aus 2026 wird zur Zielerfüllung verwendet",
         },
         {
           year: 2028,
-          previousConsumptionMwh: 1178.00,
-          currentConsumptionMwh: 1130.00,
-          measureSavingsMwh: 90.00,
-          comment: "Hohe Maßnahmen-Einsparung; neues Guthaben entsteht",
+          previousConsumptionMwh: null,
+          currentConsumptionMwh: 1110.00,
+          comment: "Restguthaben wird verbraucht; geringe Fehlmenge bleibt",
         },
         {
           year: 2029,
-          previousConsumptionMwh: 1130.00,
-          currentConsumptionMwh: 1120.00,
-          measureSavingsMwh: 5.00,
-          comment: "Guthaben aus Vergangenheit wird verwendet",
+          previousConsumptionMwh: null,
+          currentConsumptionMwh: 1110.00,
+          comment: "Nachholung 1J und neue Fehlmenge entstehen",
         },
         {
           year: 2030,
-          previousConsumptionMwh: 1120.00,
+          previousConsumptionMwh: null,
           currentConsumptionMwh: 1110.00,
-          measureSavingsMwh: 8.00,
-          comment: "weiterer Guthabenverbrauch",
+          comment: "Nachholung 2J wird überfällig",
         },
         {
           year: 2031,
-          previousConsumptionMwh: 1110.00,
-          currentConsumptionMwh: 1100.00,
-          measureSavingsMwh: 10.00,
-          comment: "weiteres Testjahr",
+          previousConsumptionMwh: null,
+          currentConsumptionMwh: 990.00,
+          comment: "Hohe Verbrauchsdifferenz erfüllt Ziel und Nachholung teilweise",
+        },
+        {
+          year: 2032,
+          previousConsumptionMwh: null,
+          currentConsumptionMwh: 990.00,
+          comment: "Unter 1.000 MWh Vorjahresverbrauch; nicht pflichtig",
         },
       ];
 
@@ -427,6 +424,7 @@
      */
     function calculateRows(inputRows) {
       const sortedRows = [...inputRows].sort((a, b) => safeNumber(a.year) - safeNumber(b.year));
+      let previousCurrentConsumptionMwh = null;
       /** @type {Credit[]} */
       let credits = [];
       /** @type {Deficit[]} */
@@ -435,9 +433,10 @@
       const result = [];
 
       for (const row of sortedRows) {
-        const previousConsumptionMwh = safeNumber(row.previousConsumptionMwh);
+        const previousConsumptionMwh = previousCurrentConsumptionMwh === null
+          ? safeNumber(row.previousConsumptionMwh)
+          : previousCurrentConsumptionMwh;
         const currentConsumptionMwh = safeNumber(row.currentConsumptionMwh);
-        const measureSavingsMwh = safeNumber(row.measureSavingsMwh);
         const consumptionDifferenceMwh = previousConsumptionMwh - currentConsumptionMwh;
         const obligated = previousConsumptionMwh >= 1000;
         const baseTargetMwh = obligated ? previousConsumptionMwh * 0.02 : 0;
@@ -446,10 +445,10 @@
         const catchupTwoYearMwh = sum(deficits.filter((item) => item.remainingYears === 1).map((item) => item.amount));
         const totalTargetMwh = baseTargetMwh + catchupOneYearMwh + catchupTwoYearMwh;
 
-        const remainingTargetAfterMeasuresMwh = Math.max(0, totalTargetMwh - measureSavingsMwh);
-        const usedCreditMwh = Math.min(remainingTargetAfterMeasuresMwh, sum(credits.map((item) => item.amount)));
+        const remainingTargetAfterDifferenceMwh = Math.max(0, totalTargetMwh - consumptionDifferenceMwh);
+        const usedCreditMwh = Math.min(remainingTargetAfterDifferenceMwh, sum(credits.map((item) => item.amount)));
         const creditsAfterUse = consumeCreditsFifo(credits, usedCreditMwh);
-        const totalFulfillmentMwh = measureSavingsMwh + usedCreditMwh;
+        const totalFulfillmentMwh = consumptionDifferenceMwh + usedCreditMwh;
 
         let remainingFulfillment = totalFulfillmentMwh;
         const restCatchupTwoYearMwh = Math.max(0, catchupTwoYearMwh - remainingFulfillment);
@@ -475,6 +474,7 @@
 
         const calculatedRow = {
           ...row,
+          previousConsumptionMwh,
           consumptionDifferenceMwh,
           obligated,
           baseTargetMwh,
@@ -494,6 +494,7 @@
         result.push(calculatedRow);
         credits = nextCredits;
         deficits = nextDeficits;
+        previousCurrentConsumptionMwh = currentConsumptionMwh;
       }
 
       return result;
@@ -547,10 +548,10 @@
       const calculatedRows = calculateRows(rows);
       tableBody.innerHTML = "";
 
-      for (const row of calculatedRows) {
+      calculatedRows.forEach((row, displayIndex) => {
         const sourceIndex = rows.findIndex((item) => item === row || item.year === row.year);
-        tableBody.appendChild(createRowElement(row, sourceIndex));
-      }
+        tableBody.appendChild(createRowElement(row, sourceIndex, displayIndex));
+      });
 
       updateMetrics(calculatedRows);
       saveRows(rows);
@@ -559,14 +560,16 @@
     /**
      * @param {CalculatedRow} row
      * @param {number} index
+     * @param {number} displayIndex
      * @returns {HTMLTableRowElement}
      */
-    function createRowElement(row, index) {
+    function createRowElement(row, index, displayIndex) {
       const tr = document.createElement("tr");
       tr.appendChild(inputCell(row.year, "year", index, "year"));
-      tr.appendChild(inputCell(row.previousConsumptionMwh, "previousConsumptionMwh", index));
       tr.appendChild(inputCell(row.currentConsumptionMwh, "currentConsumptionMwh", index));
-      tr.appendChild(inputCell(row.measureSavingsMwh, "measureSavingsMwh", index));
+      tr.appendChild(displayIndex === 0
+        ? inputCell(row.previousConsumptionMwh, "previousConsumptionMwh", index)
+        : valueCell(row.previousConsumptionMwh));
       tr.appendChild(valueCell(row.consumptionDifferenceMwh));
       tr.appendChild(valueCell(row.obligated ? "WAHR" : "FALSCH"));
       tr.appendChild(valueCell(row.baseTargetMwh));
@@ -674,9 +677,8 @@
     function toCsv(calculatedRows) {
       const headers = [
         "Jahr",
-        "Verbrauch_Vorjahr_MWh",
         "Verbrauch_Aktuelles_Jahr_MWh",
-        "Einsparung_Massnahmen_MWh",
+        "Verbrauch_Vorjahr_MWh",
         "Verbrauchsdifferenz_MWh",
         "Pflichtig",
         "Basisziel_2pct_MWh",
@@ -694,9 +696,8 @@
 
       const lines = calculatedRows.map((row) => [
         row.year,
-        row.previousConsumptionMwh,
         row.currentConsumptionMwh,
-        row.measureSavingsMwh,
+        row.previousConsumptionMwh,
         row.consumptionDifferenceMwh,
         row.obligated ? "WAHR" : "FALSCH",
         row.baseTargetMwh,
@@ -797,7 +798,6 @@
           year: toNullableNumber(record.year),
           previousConsumptionMwh: toNullableNumber(record.previousConsumptionMwh),
           currentConsumptionMwh: toNullableNumber(record.currentConsumptionMwh),
-          measureSavingsMwh: toNullableNumber(record.measureSavingsMwh),
           comment: typeof record.comment === "string" ? record.comment : "",
         };
       });
